@@ -26,7 +26,15 @@ def get_elf_header():
         0x3E,0,                         # e_machine
         1,0,0,0]+                       # e_version
         get_addr("_start")+             # e_entry
-        get_addr("phdr")                # e_phoff
+        get_addr("phdr")+               # e_phoff
+        get_addr("shdr")+               # e_shoff
+        [0,0,0,0,                       # e_flags
+        64,0,                           # e_ehsize
+        0x38,0,                         # e_phentsize
+        1,0,                            # e_phnum
+        0,0,                            # e_shentsize
+        0,0,                            # e_shnum
+        0,0]                            # e_shstrndx
     )
 
 class Segment:
