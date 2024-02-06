@@ -1,0 +1,106 @@
+Name        small_hw                    brainfuck
+magic       7F 45 4C 46                 7F 45 4C 46
+e_ident     02 01 01 00                 02 01 01 00
+empty       00 00 00 00 00 00 00 00     00 00 00 00 00 00 00 00
+e_type      02 00                       02 00
+e_machine   3E 00                       3E 00
+e_version   01 00 00 00                 01 00 00 00
+e_entry     78 80 04 08 00 00 00 00     B6 10 40 00 00 00 00 00
+e_phoff     40 00 00 00 00 00 00 00     40 00 00 00 00 00 00 00
+e_shoff     00 00 00 00 00 00 00 00     08 22 00 00 00 00 00 00
+e_flags     00 00 00 00                 00 00 00 00
+e_ehsize    40 00                       40 00
+e_phentsize 38 00                       38 00
+e_phnum     01 00                       03 00
+e_shentsize 00 00                       40 00
+e_shnum     00 00                       04 00
+e_shstrndx  00 00                       03 00
+
+programm header
+p_type      01 00 00 00                 01 00 00 00
+p_flags     05 00 00 00                 04 00 00 00
+p_offset    00 00 00 00 00 00 00 00     00 00 00 00 00 00 00 00
+p_vaddr     00 80 04 08 00 00 00 00     00 00 40 00 00 00 00 00
+p_paddr     00 80 04 08 00 00 00 00     00 00 40 00 00 00 00 00
+p_filesz    A7 00 00 00 00 00 00 00     E8 00 00 00 00 00 00 00
+p_memsz     A7 00 00 00 00 00 00 00     E8 00 00 00 00 00 00 00
+p_align     00 00 00 00 00 00 00 00     00 10 00 00 00 00 00 00
+
+section header .text
+sh_name     0B 00 00 00
+sh_type     01 00 00 00
+sh_flags    06 00 00 00 00 00 00 00
+sh_addr     00 10 40 00 00 00 00 00
+sh_offset   00 10 00 00 00 00 00 00
+sh_size     EE 11 00 00 00 00 00 00
+sh_link     00 00 00 00
+sh_info     00 00 00 00
+sh_addralign10 00 00 00 00 00 00 00
+sh_entsize  00 00 00 00 00 00 00 00
+
+section header .bss
+sh_name     11 00 00 00
+sh_type     08 00 00 00
+sh_flags    03 00 00 00 00 00 00 00
+sh_addr     00 30 40 00 00 00 00 00
+sh_offset   00 30 00 00 00 00 00 00
+sh_size     58 75 00 00 00 00 00 00
+sh_link     00 00 00 00
+sh_info     00 00 00 00
+sh_addralign04 00 00 00 00 00 00 00
+sh_entsize  00 00 00 00 00 00 00 00
+
+section header .shstrtab
+sh_name     01 00 00 00
+sh_type     03 00 00 00
+sh_flags    00 00 00 00 00 00 00 00
+sh_addr     00 00 00 00 00 00 00 00
+sh_offset   EE 21 00 00 00 00 00 00
+sh_size     16 00 00 00 00 00 00 00
+sh_link     00 00 00 00
+sh_info     00 00 00 00
+sh_addralign01 00 00 00 00 00 00 00
+sh_entsize  00 00 00 00 00 00 00 00
+
+shstrtab
+            00
+.shstrtab   2E 73 68 73 74 72 74 61 62 00
+.text       2E 74 65 78 74 00
+.bss        2E 62 73 73 00
+
+
+mov rax B8      eax B8  al  B0
+mov rcx 48 B9   ecx B9  cl  B1
+mov rdx BA      edx BA  dl  B2
+mov rbx BB      ebx BB  bl  B3
+mov rdi BF      edi BF  dil 40 B7
+mov rsi 48 BE   esi BE  sil 40 B6
+int CD
+syscall 0F 05
+ret C3
+call E8 + 4 signed bytes offset
+inc rax 48 FF C0    eax FF C0   al FE C0
+inc rcx 48 FF C1    ecx FF C1   cl FE C1
+inc rdx 48 FF C2    edx FF C2   dl FE C2
+inc rbx 48 FF C3    ebx FF C3   bl FE C3
+inc rdi 48 FF C7    edi FF C7   dil 40 FE C7
+dec rbx 48 FF CB    ebx FF CB   bl FE CB
+dec rdi 48 FF CF    edi FF CF   dil 40 FE CF
+mov [rbx], dil  40 88 3B
+mov rdi, [rbx]  48 8B 3B
+mov rsi, rbx    48 89 DE
+mov rbx, addr   48 BB <8 byte address>
+or dword [termios+12], ICANON   83 0C 25 0C 30 40 00 02
+and dword [termios+12], ~ICANON 83 24 25 0C 30 40 00 FD
+(3 byte+ 4 byte address [terminos+12]+1byte ICANON)
+or dil, dil     40 08 FF
+or rax, rbx     48 09 D8
+or rax, rdx     48 09 D0
+or rax, rcx     48 09 D8
+je  74 (1 byte signed offset)
+jne 75 (1 byte signed offset)
+je branch_85    0F 84 (signed 4 byte offset)
+jne branch_46   0F 85 (signed 4 byte offset)
+jmp E9 
+jmp EB (1 byte offset)
+jmp E9 (4 byte offset)
