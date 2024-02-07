@@ -31,10 +31,22 @@ def get_elf_header():
         [0,0,0,0,                       # e_flags
         64,0,                           # e_ehsize
         0x38,0,                         # e_phentsize
-        1,0,                            # e_phnum
-        0,0,                            # e_shentsize
-        0,0,                            # e_shnum
-        0,0]                            # e_shstrndx
+        3,0,                            # e_phnum
+        0x40,0,                         # e_shentsize
+        4,0,                            # e_shnum
+        3,0]                            # e_shstrndx
+    )
+
+def get_programm_header(addr,filesz,memsz,flags=5,offset=[0]*8):
+    return bytearray([
+        1,0,0,0,                        # p_type
+        flags,0,0,0]+                   # p_flags
+        offset+                         # p_offset
+        addr+                           # p_vaddr
+        addr+                           # p_paddr
+        filesz+                         # p_filesz
+        memsz+                          # p_memsz
+        [0,0x10,0,0,0,0,0,0]            # p_align
     )
 
 class Segment:
