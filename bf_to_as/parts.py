@@ -39,7 +39,7 @@ def get_left():
 def get_exit():
     return "        jmp exit\n"
 
-def get_jne(number:int,match:int):
+def get_je(number:int,match:int):
     return f"""
         mov rdi, [rbx]
         or dil, dil
@@ -47,7 +47,7 @@ def get_jne(number:int,match:int):
     branch_{number}:
 """
 
-def get_jz(number:int,match:int):
+def get_jne(number:int,match:int):
     return f"""
         mov rdi, [rbx]
         or dil, dil

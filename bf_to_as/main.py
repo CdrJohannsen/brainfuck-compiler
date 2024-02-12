@@ -47,9 +47,9 @@ while step < len(file):
     elif file[step] == ",":
         out_file += get_read()
     elif file[step] == "[":
-        out_file += get_jne(step,brackets[step])
+        out_file += get_je(step,brackets[step])
     elif file[step] == "]":
-        out_file += get_jz(step,brackets[step])
+        out_file += get_jne(step,brackets[step])
     elif file[step] == "#":
         out_file += get_debug()
     step += 1
