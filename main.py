@@ -517,5 +517,6 @@ out_file.extend(sections[".text"].header.get_content())
 out_file = flatten(out_file)
 out_file = bytearray(out_file)
 
-with open("out.out", "wb") as f:
+with open("a.out", "wb") as f:
     f.write(out_file)
+os.system("chmod +x a.out")

@@ -1,3 +1,7 @@
+# These are some of my notes for understanding how elf binaries and machine code work
+
+
+
 Name        small_hw                    brainfuck
 magic       7F 45 4C 46                 7F 45 4C 46
 e_ident     02 01 01 00                 02 01 01 00
