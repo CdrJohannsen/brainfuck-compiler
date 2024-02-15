@@ -19,31 +19,14 @@ for char in range(len(file)):
 file=file.translate(translation)
 
 res_file = bytearray()
+res_text = bytearray()
 out_file = []
 s_names = ""
-
-
-data = {}
 
 sections = {}
 programms = {}
 
-segments = {
-    "c_off": None,
-    "c_on": None,
-    "r_term": None,
-    "w_term": None,
-    "write": None,
-    "read": None,
-    "inc": None,
-    "dec": None,
-    "right": None,
-    "left": None,
-    # "left_br": None,
-    # "right_br": None,
-    # "debug": None,
-    "ex": None,
-}
+segments = {}
 
 def flatten(in_list):
     out_list = []
@@ -64,20 +47,28 @@ def flatten(in_list):
     return out_list
 
 def mov(to:str, number:int)->list:
+    desc:list
+    length:int
     match to:
         case "rax":
-            return [0xB8,number]
+            desc = [0xB8]
+            length = 4
         case "rdx":
-            return [0xBA,number]
+            desc = [0xBA]
+            length = 4
         case "rdi":
-            return [0xBF,number]
+            desc = [0xBF]
+            length = 4
         case "dil":
-            return [0x40,0xB7,number]
+            desc = [0x40,0xB7]
+            length = 1
         case "rsi":
-            return [0x48,0xBE]+list(bytearray(number.to_bytes(2)))
+            desc = [0xBE]
+            length = 4
         case _:
             print(f"Missing mov config for {to}")
             exit()
+    return desc + list(bytearray(number.to_bytes(length,byteorder="little")))
 
 def syscall()->list:
     return [0x0F,0x05]
@@ -120,6 +111,9 @@ class Address():
             return Address(self.off-a,self.pref_len,self.pref_type)
         else:
             return Address(self.off-a.off,self.pref_len,self.pref_type)
+
+    def __str__(self) -> str:
+        return f"off: {self.off} len:{self.pref_len}"
     
     def update(self,off=None,pref_len=8,pref_type=None):
         if not off == None:
@@ -139,6 +133,21 @@ shdr_start = Address(0)
 
 bracket_addr = {}
 
+class FunctionWrapper:
+    def __init__(self, ref) -> None:
+        self.reference = ref
+        self.index = 0
+
+    def get_call(self, offset:int) -> list:
+        return self.reference.get_call(offset)
+
+    def get_length(self):
+        return len(self.reference.get_call(0))
+
+    def calc_off(self, ref, index:int) -> int:
+        length = self.reference.calc_off(ref, index)
+        return length
+
 for char in range(len(file)):
     if file[char] == "[":
         unmatched.append(char)
@@ -148,6 +157,7 @@ for char in range(len(file)):
         brackets[char] = unmatched[-1]
         bracket_addr[char] = Address(0,4)
         del unmatched[-1]
+del unmatched
 
 class Segment:
     off = Address(0)
@@ -155,12 +165,11 @@ class Segment:
     length = 0
 
     def __init__(self) -> None:
-        global res_file
-        self.res_bytes()
         self.off = Address(len(res_file),4)
+        self.res_bytes()
 
     def get_rel_off(self,off:Address) -> Address:
-        return off-self.off
+        return self.off-off
 
     def get_content(self):
         # return [i if type(i) == int else i.get() for i in self.content]
@@ -171,24 +180,39 @@ class Segment:
         res_file.extend(bytearray(self.length))
 
 class Function(Segment):
-    off = Address(0,4)
-
     def __init__(self) -> None:
         for i in self.content:
             if type(i) == int:
                 self.length += 1
-            if type(i) == Address:
+            elif type(i) == Address:
                 self.length += i.pref_len
             else:
                 self.length += 5
         self.length += 1
-        super().__init__()
+        self.off = Address(len(res_text),4)
+        self.res_bytes()
 
-    def get_call(self,off:Address,index) -> list:
-        return [0xE8]+[self.get_rel_off(off)]
+    def res_bytes(self):
+        global res_text
+        res_text.extend(bytearray(self.length))
+        super().res_bytes()
+
+    def get_call(self,off:Address) -> list:
+        call = [0xE8]+self.get_rel_off(off).get()
+        return call
 
     def get_content(self):
-        return [i if type(i) == int else i.get_call(self.off,0) for i in self.content]+[0xC3]
+        content = []
+        for i in range(len(self.content)):
+            if type(self.content[i]) == int:
+                content.append(self.content[i])
+            elif type(self.content[i]) == Address:
+                content.extend(self.content[i].get())
+            else:
+                content.extend(flatten(self.content[i].get_call(self.off+len(content)+5)))
+        content += [0xC3]
+        self.length = len(flatten(self.get_call(Address(0,pref_len=4))))
+        return content
 
 
 class EHdr(Segment):
@@ -279,7 +303,7 @@ class Bss(Section):
 class Text(Section):
     def __init__(self) -> None:
         super().__init__(".text")
-        self.entrypoint = Address(0)
+        self.get_entry()
         self.off = Address(0x1000)
         self.length = self.get_len()
         global shdr_start
@@ -290,27 +314,43 @@ class Text(Section):
         self.header = SHdr(self.index,1,6,Address(0x1000,8,"addr"),self.off,self.length,0x10)
 
     def get_entry(self) -> list:
-        content = []
+        defs = []
         for segment in segments.values():
-            content.extend(segment.get_content())
-        self.entrypoint = base_addr+len(content)+self.off
+            defs.extend(segment.get_content())
+        self.entrypoint = self.off + len(flatten(defs)) + base_addr
         return self.entrypoint.get()
 
     def get_len(self) -> int:
-        length = 0
-        for segment in segments.values():
-            length += segment.length
-        length += len(file)*5
-        length += 5
+        length = len(flatten(self.get_content()))
         return length
 
     def get_content(self) -> list:
-        content = []
+        defs = []
         for segment in segments.values():
-            content.extend(segment.get_content())
+            defs.extend(segment.get_content())
+        defs.append([0x48,0xBB]+Address(0x3024,8,"addr").get())
+        length = len(flatten(defs))
+        func_calls = []
         for char in range(len(file)):
-            content.extend(self.get_segment(char).get_call(Address(len(content)),char))
-        content.extend(segments["ex"].get_call(Address(len(content))))
+            func_calls.append(FunctionWrapper(self.get_segment(char)))
+        unmatched = []
+        for part in func_calls:
+            if type(part.reference) == LeftBr:
+                part.index = length
+                unmatched.append(part)
+            elif type(part.reference) == RightBr:
+                length += part.calc_off(unmatched[-1],length)
+                unmatched.pop()
+            else:
+                length += part.get_length()
+        content = []
+        length = Address(len(flatten(defs)),pref_len=4) + 5
+        for part in func_calls:
+            content.extend(part.get_call(length))
+            length += part.get_length()
+        content.extend(segments["ex"].get_call(length))
+        content = defs + content
+        content += [0] * (len(content) % 2)
         return content
 
     def get_segment(self,char:int):
@@ -328,9 +368,9 @@ class Text(Section):
             case ",":
                 return segments["read"]
             case "[":
-                return segments["left_br"]
+                return segments["left_br"].__class__()
             case "]":
-                return segments["right_br"]
+                return segments["right_br"].__class__()
             case "#":
                 return segments["debug"]
 
@@ -339,27 +379,26 @@ Bss()
 
 class RTerm(Function):
     def __init__(self):
-        self.content = mov("rax",16)+mov("rdi",0)+mov("rsi",0x5401)+[0x48,0xBA]+sections[".bss"].off.get(4)+syscall()
+        self.content = mov("rax",16)+mov("rdi",0)+mov("rsi",0x5401)+[0x48,0xBA]+sections[".bss"].off.get_addr(8)+syscall()
         super().__init__()
 
 class WTerm(Function):
     def __init__(self):
-        self.content = mov("rax",16)+mov("rdi",0)+mov("rsi",0x5402)+[0x48,0xBA]+sections[".bss"].off.get(4)+syscall()
+        self.content = mov("rax",16)+mov("rdi",0)+mov("rsi",0x5402)+[0x48,0xBA]+sections[".bss"].off.get_addr(8)+syscall()
         super().__init__()
 
-segments["w_term"] = WTerm()
 segments["r_term"] = RTerm()
+segments["w_term"] = WTerm()
 
 class COff(Function):
     def __init__(self):
-        self.content = [segments["r_term"],0x83,0x24,0x25]+(sections[".bss"].off+12).get(4)+[0xFD,segments["w_term"]]
+        self.content = [segments["r_term"],0x83,0x24,0x25]+(sections[".bss"].off+12).get_addr(4)+[0xFD,segments["w_term"]]
         super().__init__()
 
 class COn(Function):
     def __init__(self):
-        self.content = [segments["r_term"],0x83,0x0C,0x25]+(sections[".bss"].off+12).get(4)+[0x02,segments["w_term"]]
+        self.content = [segments["r_term"],0x83,0x0C,0x25]+(sections[".bss"].off+12).get_addr(4)+[0x02,segments["w_term"]]
         super().__init__()
-
 
 segments["c_off"] = COff()
 segments["c_on"] = COn()
@@ -394,46 +433,63 @@ class Read(Function):
         self.content = [segments["c_off"]]+mov("rax",0)+mov("dil",0)+[0x48,0x89,0xDE]+mov("rdx",1)+syscall()+[segments["c_on"]]
         super().__init__()
 
-class LeftBr(Function):
+
+class Bracket(Function):
     def __init__(self) -> None:
-        self.content = [0x48, 0x8B, 0x3B, 0x40, 0x08, 0xFF, 0x0F, 0x84]
-        self.length = 4
-        super().__init__()
+        self.content = [0x48, 0x8B, 0x3B, 0x40, 0x08, 0xFF]
+        self.length = 0
 
-    def get_call(self,off:Address,index:int):
-        bracket_addr[index].copy(off)
-        return self.content + [bracket_addr[brackets[index]]]
+    def update(self, off:int, short:bool):
+        left_br = True if off >= 0 else False
+        if short:
+            self.content += [0x74 if left_br else 0x75] + (Address(off, pref_len=1) - 8 + 16 * left_br ).get()
+        else:
+            self.content += [0x0F, 0x84 if left_br else 0x85] + (Address(off,pref_len=4) - 12 + 24 * left_br).get()
+        self.length = len(self.content)
 
-class RightBr(Function):
-    def __init__(self) -> None:
-        self.content = [0x48, 0x8B, 0x3B, 0x40, 0x08, 0xFF, 0x0F, 0x85]
-        self.length = 4
-        super().__init__()
+    def get_content(self):
+        return []
 
-    def get_call(self,off:Address,index:int):
-        bracket_addr[index].copy(off)
-        return self.content + [bracket_addr[brackets[index]]]
+    def get_call(self,off:Address) -> list:
+        return self.content
+
+class LeftBr(Bracket):
+    pass
+
+class RightBr(Bracket):
+    def calc_off(self,ref:FunctionWrapper,index:int) -> int:
+        off = index - ref.index
+        short = False
+        if off <= 127 and off >= -128:
+            short = True
+        ref.reference.update(off, short)
+        self.update(-off, short)
+        return 2 * self.length 
 
 class Exit(Function):
     def __init__(self):
         self.content = mov("rax",60)+[0x48,0x8B,0x3B]+syscall()
         super().__init__()
+        self.length -= 1
 
     def get_call(self,off:Address) -> list:
-        return [0xE9]+[self.get_rel_off(off)]
+        return [0xE9]+self.get_rel_off(off).get()
+
+    def get_content(self):
+        return self.content
 
 class Debug(Function):
     pass
 
-segments["right"] = Right()
-segments["left"] = Left()
-segments["inc"] = Inc()
-segments["dec"] = Dec()
 segments["write"] = Write()
 segments["read"] = Read()
+segments["inc"] = Inc()
+segments["dec"] = Dec()
+segments["right"] = Right()
+segments["left"] = Left()
 segments["left_br"] = LeftBr()
 segments["right_br"] = RightBr()
-segments["debug"] = Debug()
+# segments["debug"] = Debug()
 segments["ex"] = Exit()
 
 Text()

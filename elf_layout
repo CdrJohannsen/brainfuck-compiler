@@ -94,8 +94,8 @@ mov rax B8      eax B8  al  B0
 mov rcx 48 B9   ecx B9  cl  B1
 mov rdx BA      edx BA  dl  B2
 mov rbx BB      ebx BB  bl  B3
+mov rsi BE      esi BE  sil 40 B6
 mov rdi BF      edi BF  dil 40 B7
-mov rsi 48 BE   esi BE  sil 40 B6
 int CD
 syscall 0F 05
 ret C3

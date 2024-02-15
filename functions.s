@@ -1,17 +1,3 @@
-    canonical_off:
-        call read_stdin_termios
-        ; clear canonical bit in local mode flags
-        and dword [termios+12], ~ICANON
-        call write_stdin_termios
-        ret
-
-    canonical_on:
-        call read_stdin_termios
-        ; set canonical bit in local mode flags
-        or dword [termios+12], ICANON
-        call write_stdin_termios
-        ret
-
     read_stdin_termios:
         ; push r10
         mov rax, 16
@@ -29,6 +15,20 @@
         mov rdx, termios
         syscall
         ; pop r10
+        ret
+
+    canonical_off:
+        call read_stdin_termios
+        ; clear canonical bit in local mode flags
+        and dword [termios+12], ~ICANON
+        call write_stdin_termios
+        ret
+
+    canonical_on:
+        call read_stdin_termios
+        ; set canonical bit in local mode flags
+        or dword [termios+12], ICANON
+        call write_stdin_termios
         ret
 
     write:
