@@ -29,6 +29,7 @@ programms = {}
 segments = {}
 
 def flatten(in_list):
+    """ Flatten nested list"""
     out_list = []
     for element in in_list:
         if type(element) == list:
@@ -47,6 +48,7 @@ def flatten(in_list):
     return out_list
 
 def mov(to:str, number:int)->list:
+    """ Get a mov instruction """
     desc:list
     length:int
     match to:
@@ -71,25 +73,30 @@ def mov(to:str, number:int)->list:
     return desc + list(bytearray(number.to_bytes(length,byteorder="little")))
 
 def syscall()->list:
+    """ Get Syscall """
     return [0x0F,0x05]
 
 class Address():
+    """Address object"""
     def __init__(self,off:int,pref_len:int=8,pref_type:str="off") -> None:
         self.off = off
         self.pref_len = pref_len
         self.pref_type = pref_type
 
     def get_off(self,length:int=0) -> list:
+        """Get the file offset of the address"""
         if not length:
             length = self.pref_len
         return list(self.off.to_bytes(length,byteorder="little",signed=True))
 
     def get_addr(self,length:int=0) -> list:
+        """Get the memory offset of the address"""
         if not length:
             length = self.pref_len
         return list((self.off+base_addr.off).to_bytes(length,byteorder="little",signed=True))
 
     def get(self,length:int=0) -> list:
+        """Get prefered offset of the address"""
         if not length:
             length = self.pref_len
         if self.pref_type == "off":
@@ -115,7 +122,8 @@ class Address():
     def __str__(self) -> str:
         return f"off: {self.off} len:{self.pref_len}"
     
-    def update(self,off=None,pref_len=8,pref_type=None):
+    def update(self,off=None,pref_len=None,pref_type=None):
+        """Change parameters of the address"""
         if not off == None:
             self.off = off
         if not pref_len == None:
@@ -124,6 +132,7 @@ class Address():
             self.pref_type = pref_type
 
     def copy(self,f):
+        """Copy another Address"""
         self.off = f.off
         self.pref_len = f.pref_len
         self.pref_type = f.pref_type
@@ -134,6 +143,7 @@ shdr_start = Address(0)
 bracket_addr = {}
 
 class FunctionWrapper:
+    """Wraps a Function object in a generalized class"""
     def __init__(self, ref) -> None:
         self.reference = ref
         self.index = 0
@@ -145,21 +155,12 @@ class FunctionWrapper:
         return len(self.reference.get_call(0))
 
     def calc_off(self, ref, index:int) -> int:
+        """Calculate the offset to another Address"""
         length = self.reference.calc_off(ref, index)
         return length
 
-for char in range(len(file)):
-    if file[char] == "[":
-        unmatched.append(char)
-        bracket_addr[char] = Address(0,4)
-    elif file[char] == "]":
-        brackets[unmatched[-1]] = char
-        brackets[char] = unmatched[-1]
-        bracket_addr[char] = Address(0,4)
-        del unmatched[-1]
-del unmatched
-
 class Segment:
+    """Base class for all Segments"""
     off = Address(0)
     content = list()
     length = 0
@@ -169,17 +170,19 @@ class Segment:
         self.res_bytes()
 
     def get_rel_off(self,off:Address) -> Address:
+        """Get the relative offset to another address"""
         return self.off-off
 
     def get_content(self):
-        # return [i if type(i) == int else i.get() for i in self.content]
         return self.content
 
     def res_bytes(self):
+        """Reserve bytes"""
         global res_file
         res_file.extend(bytearray(self.length))
 
 class Function(Segment):
+    """Contains the content for a function"""
     def __init__(self) -> None:
         for i in self.content:
             if type(i) == int:
@@ -193,15 +196,18 @@ class Function(Segment):
         self.res_bytes()
 
     def res_bytes(self):
+        """Reserve bytes"""
         global res_text
         res_text.extend(bytearray(self.length))
         super().res_bytes()
 
     def get_call(self,off:Address) -> list:
+        """Get a call to this function"""
         call = [0xE8]+self.get_rel_off(off).get()
         return call
 
     def get_content(self):
+        """Get the content of this function"""
         content = []
         for i in range(len(self.content)):
             if type(self.content[i]) == int:
@@ -216,6 +222,7 @@ class Function(Segment):
 
 
 class EHdr(Segment):
+    """Elf64 header"""
     def __init__(self) -> None:
         self.content = ([
             0x7F,0x45,0x4C,0x46,2,1,1,0,                # e_ident
@@ -237,6 +244,7 @@ class EHdr(Segment):
         super().__init__()
 
 class PHdr(Segment):
+    """Programm header"""
     def __init__(self,addr:Address,filesz:Address,memsz:Address,flags=5,offset=Address(0)) -> None:
         self.length = 0x38
         self.content = ([
@@ -252,6 +260,7 @@ class PHdr(Segment):
         super().__init__()
 
 class SHdr(Segment):
+    """Section header"""
     def __init__(self,name:int,typ:int,flags:int,addr:Address,offset:Address,length:int,align:int) -> None:
         self.content = ([
             name,0,0,0,                                 # sh_name
@@ -271,6 +280,7 @@ class SHdr(Segment):
         return super().get_content()
 
 class Section(Segment):
+    """Generic section template"""
     def __init__(self,name:str) -> None:
         self.name = name
         sections[name] = self
@@ -283,6 +293,8 @@ class Section(Segment):
             super().__init__()
 
 class Shstrtab(Section):
+    """Shstrtab section
+    Holds the names of the sections"""
     def __init__(self) -> None:
         super().__init__(".shstrtab")
 
@@ -293,6 +305,8 @@ class Shstrtab(Section):
         return [ord(i) for i in s_names]
 
 class Bss(Section):
+    """Bss section
+    The section where data ist stored (Not sure if this souldn't be another section)"""
     def __init__(self) -> None:
         super().__init__(".bss")
         self.off = Address(0x3000)
@@ -301,6 +315,8 @@ class Bss(Section):
         self.header = SHdr(self.index,8,3,Address(0x3000,8,"addr"),self.off,0x7558,4) # TODO adress
 
 class Text(Section):
+    """Text section
+    Holds the executable code"""
     def __init__(self) -> None:
         super().__init__(".text")
         self.get_entry()
@@ -314,6 +330,7 @@ class Text(Section):
         self.header = SHdr(self.index,1,6,Address(0x1000,8,"addr"),self.off,self.length,0x10)
 
     def get_entry(self) -> list:
+        """Get the entrypoint of the executable"""
         defs = []
         for segment in segments.values():
             defs.extend(segment.get_content())
@@ -321,18 +338,26 @@ class Text(Section):
         return self.entrypoint.get()
 
     def get_len(self) -> int:
+        """Get the length of this section"""
         length = len(flatten(self.get_content()))
         return length
 
     def get_content(self) -> list:
+        """Get the content of this section
+        This is the executable code"""
         defs = []
+        # Gets the function definitions
         for segment in segments.values():
             defs.extend(segment.get_content())
         defs.append([0x48,0xBB]+Address(0x3024,8,"addr").get())
         length = len(flatten(defs))
         func_calls = []
+
+        # Create a FunctionWrapper for each function call
         for char in range(len(file)):
             func_calls.append(FunctionWrapper(self.get_segment(char)))
+
+        # Match the brackets together and update their settings
         unmatched = []
         for part in func_calls:
             if type(part.reference) == LeftBr:
@@ -343,17 +368,23 @@ class Text(Section):
                 unmatched.pop()
             else:
                 length += part.get_length()
+
+        # Get the function calls and bracket jumps
         content = []
         length = Address(len(flatten(defs)),pref_len=4) + 5
         for part in func_calls:
             content.extend(part.get_call(length))
             length += part.get_length()
+
+        # Exit
         content.extend(segments["ex"].get_call(length))
+
         content = defs + content
         content += [0] * (len(content) % 2)
         return content
 
     def get_segment(self,char:int):
+        """Get the function object for a character"""
         match file[char]:
             case ">":
                 return segments["right"]
@@ -374,72 +405,88 @@ class Text(Section):
             case "#":
                 return segments["debug"]
 
+# Create .shstrtab section to wich other sections can write their names to
 sections[".shstrtab"] = Shstrtab()
+# Create .bss section
 Bss()
 
 class RTerm(Function):
+    """read_stdin_termios"""
     def __init__(self):
         self.content = mov("rax",16)+mov("rdi",0)+mov("rsi",0x5401)+[0x48,0xBA]+sections[".bss"].off.get_addr(8)+syscall()
         super().__init__()
 
 class WTerm(Function):
+    """write_stdin_termios"""
     def __init__(self):
         self.content = mov("rax",16)+mov("rdi",0)+mov("rsi",0x5402)+[0x48,0xBA]+sections[".bss"].off.get_addr(8)+syscall()
         super().__init__()
 
+# These object need to be created here, so the next classes can use them
 segments["r_term"] = RTerm()
 segments["w_term"] = WTerm()
 
 class COff(Function):
+    """Turn off canonical mode"""
     def __init__(self):
         self.content = [segments["r_term"],0x83,0x24,0x25]+(sections[".bss"].off+12).get_addr(4)+[0xFD,segments["w_term"]]
         super().__init__()
 
 class COn(Function):
+    """Turn on canonical mode"""
     def __init__(self):
         self.content = [segments["r_term"],0x83,0x0C,0x25]+(sections[".bss"].off+12).get_addr(4)+[0x02,segments["w_term"]]
         super().__init__()
 
+# These object need to be created here, so the next classes can use them
 segments["c_off"] = COff()
 segments["c_on"] = COn()
 
 class Right(Function):
+    """Move the pointer to the right"""
     def __init__(self):
         self.content = [0x48,0xFF,0xC3]
         super().__init__()
 
 class Left(Function):
+    """Move the pointer to the left"""
     def __init__(self):
         self.content = [0x48,0xFF,0xCB]
         super().__init__()
 
 class Inc(Function):
+    """Increment the byte at the pointer location"""
     def __init__(self):
         self.content = [0x48,0x8B,0x3B]+[0x40,0xFE,0xC7]+[0x40,0x88,0x3B]
         super().__init__()
 
 class Dec(Function):
+    """Decrement the byte at the pointer location"""
     def __init__(self):
         self.content = [0x48,0x8B,0x3B]+[0x40,0xFE,0xCF]+[0x40,0x88,0x3B]
         super().__init__()
 
 class Write(Function):
+    """Write to stdout"""
     def __init__(self):
         self.content = mov("rax",1)+mov("rdi",1)+[0x48,0x89,0xDE]+mov("rdx",1)+syscall()
         super().__init__()
 
 class Read(Function):
+    """Read one char from stdin"""
     def __init__(self):
         self.content = [segments["c_off"]]+mov("rax",0)+mov("dil",0)+[0x48,0x89,0xDE]+mov("rdx",1)+syscall()+[segments["c_on"]]
         super().__init__()
 
 
 class Bracket(Function):
+    """Generic bracket class"""
     def __init__(self) -> None:
         self.content = [0x48, 0x8B, 0x3B, 0x40, 0x08, 0xFF]
         self.length = 0
 
     def update(self, off:int, short:bool):
+        """Update the values"""
         left_br = True if off >= 0 else False
         if short:
             self.content += [0x74 if left_br else 0x75] + (Address(off, pref_len=1) - 8 + 16 * left_br ).get()
@@ -454,10 +501,13 @@ class Bracket(Function):
         return self.content
 
 class LeftBr(Bracket):
+    """Empty bracket class"""
     pass
 
 class RightBr(Bracket):
+    """Right bracket"""
     def calc_off(self,ref:FunctionWrapper,index:int) -> int:
+        """Calculate the offset to the matching bracket"""
         off = index - ref.index
         short = False
         if off <= 127 and off >= -128:
@@ -467,6 +517,8 @@ class RightBr(Bracket):
         return 2 * self.length 
 
 class Exit(Function):
+    """The exit function
+    Exits with code 0"""
     def __init__(self):
         self.content = mov("rax",60)+[0x48,0x8B,0x3B]+syscall()
         super().__init__()
@@ -479,8 +531,10 @@ class Exit(Function):
         return self.content
 
 class Debug(Function):
+    """Currently not implemented"""
     pass
 
+# Create objects for the function classes
 segments["write"] = Write()
 segments["read"] = Read()
 segments["inc"] = Inc()
@@ -492,8 +546,10 @@ segments["right_br"] = RightBr()
 # segments["debug"] = Debug()
 segments["ex"] = Exit()
 
+# Create .text section
 Text()
 
+# Fill the out file with all content
 out_file.extend(EHdr().get_content())
 out_file.extend(PHdr(base_addr,Address(0xE8),Address(0xE8),4).get_content())
 out_file.extend(PHdr(
@@ -514,9 +570,11 @@ out_file.extend(sections[".bss"].header.get_content())
 sections[".text"].gen_header()
 out_file.extend(sections[".text"].header.get_content())
 
+# Convert the outfile to a bytearray
 out_file = flatten(out_file)
 out_file = bytearray(out_file)
 
+# Write outfile and make executable
 with open("a.out", "wb") as f:
     f.write(out_file)
 os.system("chmod +x a.out")
