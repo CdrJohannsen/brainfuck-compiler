@@ -510,7 +510,7 @@ class RightBr(Bracket):
         """Calculate the offset to the matching bracket"""
         off = index - ref.index
         short = False
-        if off <= 127 and off >= -128:
+        if off <= 120 and off >= -120:
             short = True
         ref.reference.update(off, short)
         self.update(-off, short)
