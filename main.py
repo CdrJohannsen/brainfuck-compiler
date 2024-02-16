@@ -543,7 +543,7 @@ segments["right"] = Right()
 segments["left"] = Left()
 segments["left_br"] = LeftBr()
 segments["right_br"] = RightBr()
-# segments["debug"] = Debug()
+segments["debug"] = Debug()
 segments["ex"] = Exit()
 
 # Create .text section
