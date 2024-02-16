@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-import sys, os
+import sys, os, argparse
 
-if len(sys.argv) < 2:
-    print("Needs file to convert")
-    exit()
+parser = argparse.ArgumentParser()
+parser.add_argument("-o", "--out", help="The name of the file generated", metavar="FILE", default="a.out")
+parser.add_argument("file", help="The file to compile")
+args = parser.parse_args()
 
-
-with open(sys.argv[1], "r") as f:
+with open(args.file, "r") as f:
     file = f.read()
 
 unmatched = []
@@ -575,6 +575,6 @@ out_file = flatten(out_file)
 out_file = bytearray(out_file)
 
 # Write outfile and make executable
-with open("a.out", "wb") as f:
+with open(args.out, "wb") as f:
     f.write(out_file)
-os.system("chmod +x a.out")
+os.system(f"chmod +x {args.out}")
